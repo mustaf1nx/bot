@@ -274,6 +274,77 @@ class OPRegistryTests(unittest.IsolatedAsyncioTestCase):
             await handle_op_message(update_vi, context)
             update_vi.effective_message.reply_text.assert_not_called()
 
+    async def test_handle_op_message_asks_cs_clarification(self) -> None:
+        from bot import WelcomeTracker
+
+        async def run_clarification(registry: OPRegistry, tracker: WelcomeTracker, answer: str):
+            chat_id, welcome_msg_id, user_id = 100, 500, 777
+            tracker.add_welcome_message(chat_id, welcome_msg_id, user_id)
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            # Reply "CS" -> clarification question, not an admin answer
+            update_cs = MagicMock()
+            update_cs.effective_message.chat.id = chat_id
+            update_cs.effective_message.from_user.id = user_id
+            update_cs.effective_message.from_user.is_bot = False
+            update_cs.effective_message.from_user.mention_html.return_value = "@student"
+            update_cs.effective_message.reply_to_message.message_id = welcome_msg_id
+            update_cs.effective_message.text = "CS"
+            update_cs.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update_cs, context)
+            update_cs.effective_message.reply_text.assert_called_once()
+            called_text = update_cs.effective_message.reply_text.call_args[0][0]
+            self.assertIn("Computer Science (IT)", called_text)
+            self.assertIn("Cybersecurity (CS)", called_text)
+
+            clarification_id = update_cs.effective_message.reply_text.return_value.message_id
+
+            # Answer the clarification
+            update_answer = MagicMock()
+            update_answer.effective_message.chat.id = chat_id
+            update_answer.effective_message.from_user.id = user_id
+            update_answer.effective_message.from_user.is_bot = False
+            update_answer.effective_message.from_user.mention_html.return_value = "@student"
+            update_answer.effective_message.reply_to_message.message_id = clarification_id
+            update_answer.effective_message.text = answer
+            update_answer.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update_answer, context)
+            return update_answer.effective_message.reply_text.call_args[0][0]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+
+            # Full name -> IT program
+            tracker = WelcomeTracker(max_messages=10)
+            text = await run_clarification(registry, tracker, "Computer Science")
+            self.assertIn("IT", text)
+            self.assertIn("@TypicallyRain", text)
+
+            # Code IT -> IT program
+            tracker = WelcomeTracker(max_messages=10)
+            text = await run_clarification(registry, tracker, "IT")
+            self.assertIn("IT", text)
+            self.assertIn("@TypicallyRain", text)
+
+            # Code CS -> Cybersecurity program
+            tracker = WelcomeTracker(max_messages=10)
+            text = await run_clarification(registry, tracker, "CS")
+            self.assertIn("CS", text)
+            self.assertIn("@alishaisyapping", text)
+
+            # Full name -> Cybersecurity program
+            tracker = WelcomeTracker(max_messages=10)
+            text = await run_clarification(registry, tracker, "Cybersecurity")
+            self.assertIn("CS", text)
+            self.assertIn("@alishaisyapping", text)
+
     def test_build_welcome_text_contains_reply_instruction(self) -> None:
         mock_chain = MagicMock()
         mock_chain.generate.return_value = "Приветственный текст"
