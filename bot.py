@@ -130,19 +130,19 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
         "name": "Software Engineering",
         "school": "School of Software Engineering",
         "admin": "@Alsh444",
-        "aliases": ["SE", "СЕ", "Software Engineering", "сешник", "сешники", "сешница", "софтвер", "софтверщик", "софтваре", "софтвер инжиниринг"],
+        "aliases": ["SE", "СЕ", "Software Engineering", "сешник", "сешники", "сешница", "софтвер", "софтверщик", "софтварщик", "софтваре", "софтвар", "софтвер инжиниринг", "софтвар инжиниринг"],
     },
     "IT": {
         "name": "Computer Science",
         "school": "School of Artificial Intelligence and Data Science",
         "admin": "@TypicallyRain",
-        "aliases": ["IT", "ИТ", "Computer Science", "айти", "айтишник", "айтишники", "компьютер сайнс", "комп сайнс", "кс"],
+        "aliases": ["IT", "ИТ", "Computer Science", "айти", "айтишник", "айтишники", "компьютер сайнс", "комп сайнс", "комп сай", "комп саи", "компьютерные науки", "кс"],
     },
     "BDA": {
         "name": "Big Data Analysis",
         "school": "School of Artificial Intelligence and Data Science",
         "admin": "@therealarujxx",
-        "aliases": ["BDA", "БДА", "Big Data Analysis", "Big Data", "бдашник", "бдашники", "бигдата", "биг дата", "биг дата анализис"],
+        "aliases": ["BDA", "БДА", "Big Data Analysis", "Big Data", "бдашник", "бдашники", "бигдата", "биг дата", "дата анализис", "биг дата анализис"],
     },
     "MCS": {
         "name": "Mathematical and Computational Science",
@@ -154,25 +154,25 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
         "name": "Cybersecurity",
         "school": "School of Cybersecurity",
         "admin": "@alishaisyapping",
-        "aliases": ["CS", "КС", "Cybersecurity", "кибербез", "кибербезопасность", "сайберсекьюрити", "сайбер", "кибер"],
+        "aliases": ["CS", "КС", "Cybersecurity", "Cyber Security", "кибербез", "кибербезопасность", "киберсекьюрити", "кибер секьюрити", "сайберсекьюрити", "сайбер", "кибер"],
     },
     "SST": {
         "name": "Smart Security Technologies",
         "school": "School of Cybersecurity",
         "admin": "@alishaisyapping",
-        "aliases": ["SST", "ССТ", "Smart Security Technologies", "ссшник", "смарт секьюрити", "смарт секьюрити технолоджис"],
+        "aliases": ["SST", "ССТ", "Smart Security Technologies", "сстшник", "смарт секьюрити", "смартсекьюрити", "смарт секьюрити технолоджис"],
     },
     "IIOT": {
         "name": "Industrial Internet of Things",
         "school": "School of Intelligent Systems",
         "admin": "@dhshrbrhr",
-        "aliases": ["IIOT", "ИИОТ", "Industrial Internet of Things", "ииотник", "индастриал иот", "иот"],
+        "aliases": ["IIOT", "ИИОТ", "Industrial Internet of Things", "ииотник", "индастриал иот", "индустриал иот", "иот"],
     },
     "EE": {
         "name": "Electronic Engineering",
         "school": "School of Intelligent Systems",
         "admin": "@dhshrbrhr",
-        "aliases": ["EE", "ЕЕ", "ЭЭ", "Electronic Engineering", "электронщик", "электроник инжиниринг", "электроника"],
+        "aliases": ["EE", "ЕЕ", "ЭЭ", "Electronic Engineering", "электронщик", "электроник инжиниринг", "електроник инжиниринг", "электроника"],
     },
     "ST": {
         "name": "Smart Technologies",
@@ -184,7 +184,7 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
         "name": "Digital technologies in nuclear power engineering",
         "school": "School of Intelligent Systems",
         "admin": "@dhshrbrhr",
-        "aliases": ["DNE", "ДНЕ", "Digital technologies in nuclear power engineering", "днешник", "нуклеар", "ядерка", "ядерная инженерия"],
+        "aliases": ["DNE", "DTNPE", "ДНЕ", "ДТНПЕ", "Digital technologies in nuclear power engineering", "днешник", "нуклеар", "ядерка", "ядерная инженерия"],
     },
     "ITM": {
         "name": "IT Management",
@@ -202,19 +202,19 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
         "name": "AI Business",
         "school": "School of Creative Industries",
         "admin": "@assiixq",
-        "aliases": ["AIB", "АИБ", "AI Business", "аибник", "аи бизнес", "ай бизнес", "ии бизнес"],
+        "aliases": ["AIB", "АИБ", "AI Business", "аибник", "ииб", "аи бизнес", "ай бизнес", "ии бизнес"],
     },
     "MT": {
         "name": "Media Technologies",
         "school": "School of Creative Industries",
         "admin": "@Subbzerr01",
-        "aliases": ["MT", "МТ", "Media Technologies", "мтшник", "медиа тех", "медиа технологии", "медиатехнологии"],
+        "aliases": ["MT", "МТ", "Media Technologies", "мтшник", "медиа тех", "медия тех", "медиа технологии", "медия технологии", "медиятехнологии", "медиатехнологии"],
     },
     "DJ": {
         "name": "Digital Journalism",
         "school": "School of Creative Industries",
         "admin": "@vveetaaa",
-        "aliases": ["DJ", "ДЖ", "Digital Journalism", "джник", "диджитал журналистика", "цифровая журналистика", "диджей"],
+        "aliases": ["DJ", "ДЖ", "Digital Journalism", "джник", "журналистика", "диджитал журналистика", "цифровая журналистика", "диджей"],
     },
     "DPA": {
         "name": "Digital Public Administration",
@@ -226,7 +226,7 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
         "name": "Digital Jurisprudence",
         "school": "School of Digital Public Administration",
         "admin": "@finrandiri",
-        "aliases": ["DL", "ДЛ", "Digital Jurisprudence", "длшник", "диджитал юриспруденция", "цифровая юриспруденция", "цифровые юристы"],
+        "aliases": ["DL", "ДЛ", "Digital Jurisprudence", "длшник", "юриспруденция", "диджитал юриспруденция", "цифровая юриспруденция", "цифровые юристы"],
     },
 }
 
