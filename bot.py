@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Message, Update
 from telegram.constants import ChatMemberStatus, ChatType, ParseMode
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import (
@@ -207,13 +207,13 @@ DEFAULT_OPS: dict[str, dict[str, Any]] = {
     "MT": {
         "name": "Media Technologies",
         "school": "School of Creative Industries",
-        "admin": "@assiixq",
+        "admin": "@Subbzerr01",
         "aliases": ["MT", "МТ", "Media Technologies", "мтшник", "медиа тех", "медиа технологии", "медиатехнологии"],
     },
     "DJ": {
         "name": "Digital Journalism",
         "school": "School of Creative Industries",
-        "admin": "@assiixq",
+        "admin": "@vveetaaa",
         "aliases": ["DJ", "ДЖ", "Digital Journalism", "джник", "диджитал журналистика", "цифровая журналистика", "диджей"],
     },
     "DPA": {
@@ -247,6 +247,7 @@ class WelcomeTracker:
         self.max_messages = max_messages
         self._active_new_members: dict[tuple[int, int], int] = {}
         self._welcome_messages: dict[tuple[int, int], int] = {}
+        self._pending_clarification: set[tuple[int, int]] = set()
 
     def add_welcome_message(
         self, chat_id: int, welcome_message_id: int, target_user_id: int
@@ -289,6 +290,16 @@ class WelcomeTracker:
 
     def remove_user(self, chat_id: int, user_id: int) -> None:
         self._active_new_members.pop((chat_id, user_id), None)
+        self.clear_pending_clarification(chat_id, user_id)
+
+    def is_pending_clarification(self, chat_id: int, user_id: int) -> bool:
+        return (chat_id, user_id) in self._pending_clarification
+
+    def add_pending_clarification(self, chat_id: int, user_id: int) -> None:
+        self._pending_clarification.add((chat_id, user_id))
+
+    def clear_pending_clarification(self, chat_id: int, user_id: int) -> None:
+        self._pending_clarification.discard((chat_id, user_id))
 
 
 class OPRegistry:
@@ -549,6 +560,59 @@ QUESTION_PATTERN = re.compile(
 )
 
 
+CS_CODE_PATTERN = re.compile(r"^\s*(cs|кс)\s*$", re.IGNORECASE)
+
+AMBIGUOUS_CS_QUESTION = (
+    "Вы о <b>Computer Science (IT)</b> или <b>Cybersecurity (CS)</b>?\n\n"
+    "Ответьте, выбрав один из вариантов."
+)
+
+
+def build_op_response(user_mention: str, op: OPProgram) -> str:
+    admin_tag = format_admin_tag(op.admin)
+    return (
+        f"Привет, {user_mention}! 👋\n\n"
+        f"📍 <b>ОП: {html.escape(op.code)} ({html.escape(op.name)})</b>\n"
+        f"🏫 <i>{html.escape(op.school)}</i>\n"
+        f"👤 Ответственный администратор: {admin_tag}"
+    )
+
+
+async def ask_cs_clarification(
+    message: Message,
+    user_mention: str,
+    tracker: WelcomeTracker,
+    chat_id: int,
+    user_id: int,
+) -> None:
+    """Ask whether CS means Computer Science (IT) or Cybersecurity, then wait
+    for the member's reply anchored to this prompt."""
+    sent_msg = await reply_with_connect_retry(
+        message,
+        AMBIGUOUS_CS_QUESTION,
+        parse_mode=ParseMode.HTML,
+        reply_to_message_id=message.message_id,
+    )
+    if sent_msg and hasattr(sent_msg, "message_id"):
+        tracker.add_welcome_message(chat_id, sent_msg.message_id, user_id)
+    tracker.add_pending_clarification(chat_id, user_id)
+
+
+def resolve_cs_choice(op_registry: OPRegistry, text: str) -> OPProgram | None:
+    """Resolve the answer to the CS clarification. The question already labels
+    the options as Computer Science (IT) and Cybersecurity (CS), so a bare
+    "CS"/"кс" answer means Cybersecurity, "IT" means Computer Science.
+    Full names and aliases are matched through the registry."""
+    if not text:
+        return None
+    if CS_CODE_PATTERN.search(text):
+        return op_registry.get("CS")
+    matched = [op for op in op_registry.find_matching_ops(text) if op.code in ("IT", "CS")]
+    if len(matched) == 1:
+        return matched[0]
+    return None
+
+
 async def handle_op_message(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -574,13 +638,37 @@ async def handle_op_message(
         return
 
     op_registry: OPRegistry = context.application.bot_data["op_registry"]
+    user_mention = (
+        message.from_user.mention_html() if message.from_user else "Студент"
+    )
+
+    if tracker.is_pending_clarification(chat_id, user_id):
+        op = resolve_cs_choice(op_registry, message.text)
+        if op is None:
+            await ask_cs_clarification(
+                message, user_mention, tracker, chat_id, user_id
+            )
+            return
+        tracker.clear_pending_clarification(chat_id, user_id)
+        tracker.remove_user(chat_id, user_id)
+        await reply_with_connect_retry(
+            message,
+            build_op_response(user_mention, op),
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=message.message_id,
+        )
+        return
+
+    if CS_CODE_PATTERN.search(message.text):
+        await ask_cs_clarification(
+            message, user_mention, tracker, chat_id, user_id
+        )
+        return
+
     matched_ops = op_registry.find_matching_ops(message.text)
 
     if not matched_ops:
         tracker.record_message(chat_id, user_id)
-        user_mention = (
-            message.from_user.mention_html() if message.from_user else "Студент"
-        )
         help_text = (
             f"Не удалось распознать ОП в вашем сообщении, {user_mention}. 🤔\n\n"
             "Пожалуйста, укажите код или название вашей ОП (например: <b>SE</b>, <b>CS</b>, <b>IT</b>, <b>BDA</b>, <b>MCS</b>).\n"
@@ -601,19 +689,8 @@ async def handle_op_message(
 
     tracker.remove_user(chat_id, user_id)
 
-    user_mention = (
-        message.from_user.mention_html() if message.from_user else "Студент"
-    )
-
     if len(matched_ops) == 1:
-        op = matched_ops[0]
-        admin_tag = format_admin_tag(op.admin)
-        reply_text = (
-            f"Привет, {user_mention}! 👋\n\n"
-            f"📍 <b>ОП: {html.escape(op.code)} ({html.escape(op.name)})</b>\n"
-            f"🏫 <i>{html.escape(op.school)}</i>\n"
-            f"👤 Ответственный администратор: {admin_tag}"
-        )
+        reply_text = build_op_response(user_mention, matched_ops[0])
     else:
         items = []
         for op in matched_ops:
