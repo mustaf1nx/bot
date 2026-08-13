@@ -715,7 +715,29 @@ async def handle_op_message(
 
 async def show_ops(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
-    if not message:
+    user = update.effective_user
+    chat = update.effective_chat
+    if not message or not user or not chat:
+        return
+
+    registry: AdminRegistry = context.application.bot_data["admins"]
+    is_authorized = registry.contains(user.id)
+
+    if not is_authorized and chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
+        try:
+            membership = await context.bot.get_chat_member(chat.id, user.id)
+            if membership.status in (
+                ChatMemberStatus.ADMINISTRATOR,
+                ChatMemberStatus.OWNER,
+            ):
+                is_authorized = True
+        except TelegramError:
+            pass
+
+    if not is_authorized:
+        await reply_with_connect_retry(
+            message, "Команда доступна только администраторам."
+        )
         return
 
     op_registry: OPRegistry = context.application.bot_data["op_registry"]
