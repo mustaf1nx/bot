@@ -417,6 +417,349 @@ class NetworkErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
         mock_logger.warning.assert_not_called()
 
 
+class NewcomerDetectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_newcomer_unreplied_standalone_op(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            chat_id = 100
+            new_user_id = 123
+
+            tracker.add_user(chat_id, new_user_id)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            update = MagicMock()
+            update.effective_message.chat.id = chat_id
+            update.effective_message.from_user.id = new_user_id
+            update.effective_message.from_user.is_bot = False
+            update.effective_message.from_user.mention_html.return_value = "@newbie"
+            update.effective_message.reply_to_message = None
+            update.effective_message.text = "SE"
+            update.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update, context)
+            update.effective_message.reply_text.assert_called_once()
+            called_text = update.effective_message.reply_text.call_args[0][0]
+            self.assertIn("SE", called_text)
+            self.assertIn("@Alsh444", called_text)
+            self.assertFalse(tracker.is_active_newcomer(chat_id, new_user_id))
+
+    async def test_newcomer_unreplied_self_id_phrases(self) -> None:
+        from bot import WelcomeTracker
+
+        phrases = [
+            ("я на се", "SE"),
+            ("я с се", "SE"),
+            ("поступил на программную инженерию", "SE"),
+            ("привет я айтишник", "IT"),
+            ("моя оп BDA", "BDA"),
+            ("выбрал кибербез", "CS"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+
+            for phrase, expected_op in phrases:
+                tracker = WelcomeTracker(max_messages=5)
+                chat_id = 100
+                user_id = 200
+                tracker.add_user(chat_id, user_id)
+
+                context = MagicMock()
+                context.application.bot_data = {
+                    "op_registry": registry,
+                    "welcome_tracker": tracker,
+                }
+
+                update = MagicMock()
+                update.effective_message.chat.id = chat_id
+                update.effective_message.from_user.id = user_id
+                update.effective_message.from_user.is_bot = False
+                update.effective_message.from_user.mention_html.return_value = "@user"
+                update.effective_message.reply_to_message = None
+                update.effective_message.text = phrase
+                update.effective_message.reply_text = AsyncMock()
+
+                await handle_op_message(update, context)
+                update.effective_message.reply_text.assert_called_once()
+                called_text = update.effective_message.reply_text.call_args[0][0]
+                self.assertIn(expected_op, called_text)
+
+    async def test_newcomer_general_chat_ignored_silently(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            chat_id = 100
+            user_id = 123
+            tracker.add_user(chat_id, user_id)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            for text in ["Всем привет!", "Привет, народ!", "Подскажите правила группы"]:
+                update = MagicMock()
+                update.effective_message.chat.id = chat_id
+                update.effective_message.from_user.id = user_id
+                update.effective_message.from_user.is_bot = False
+                update.effective_message.reply_to_message = None
+                update.effective_message.text = text
+                update.effective_message.reply_text = AsyncMock()
+
+                await handle_op_message(update, context)
+                update.effective_message.reply_text.assert_not_called()
+
+            self.assertEqual(tracker._active_new_members[(chat_id, user_id)]["messages_left"], 2)
+
+    async def test_old_member_unreplied_ignored_completely(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            update = MagicMock()
+            update.effective_message.chat.id = 100
+            update.effective_message.from_user.id = 999
+            update.effective_message.from_user.is_bot = False
+            update.effective_message.reply_to_message = None
+            update.effective_message.text = "SE"
+            update.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update, context)
+            update.effective_message.reply_text.assert_not_called()
+
+    async def test_long_sentence_with_short_code_ignored_without_self_id(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            chat_id = 100
+            user_id = 123
+            tracker.add_user(chat_id, user_id)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            update = MagicMock()
+            update.effective_message.chat.id = chat_id
+            update.effective_message.from_user.id = user_id
+            update.effective_message.from_user.is_bot = False
+            update.effective_message.reply_to_message = None
+            update.effective_message.text = "я се вчера купил новый мощный ноутбук для учебы"
+            update.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update, context)
+            update.effective_message.reply_text.assert_not_called()
+
+    async def test_newcomer_tracking_expiration_by_messages(self) -> None:
+        from bot import WelcomeTracker
+
+        tracker = WelcomeTracker(max_messages=3)
+        chat_id = 100
+        user_id = 123
+        tracker.add_user(chat_id, user_id)
+        self.assertTrue(tracker.is_active_newcomer(chat_id, user_id))
+
+        tracker.record_message(chat_id, user_id)
+        self.assertTrue(tracker.is_active_newcomer(chat_id, user_id))
+        tracker.record_message(chat_id, user_id)
+        self.assertTrue(tracker.is_active_newcomer(chat_id, user_id))
+        tracker.record_message(chat_id, user_id)
+        self.assertFalse(tracker.is_active_newcomer(chat_id, user_id))
+
+    async def test_newcomer_tracking_expiration_by_ttl(self) -> None:
+        import time
+        from bot import WelcomeTracker
+
+        tracker = WelcomeTracker(max_messages=5, ttl_seconds=0.05)
+        chat_id = 100
+        user_id = 123
+        tracker.add_user(chat_id, user_id)
+        self.assertTrue(tracker.is_active_newcomer(chat_id, user_id))
+
+        time.sleep(0.1)
+        self.assertFalse(tracker.is_active_newcomer(chat_id, user_id))
+
+    async def test_newcomer_unreplied_cs_triggers_clarification_and_resolves(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            chat_id = 100
+            user_id = 123
+            tracker.add_user(chat_id, user_id)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            # 1. Newcomer sends "CS" in chat without Reply
+            update_cs = MagicMock()
+            update_cs.effective_message.chat.id = chat_id
+            update_cs.effective_message.from_user.id = user_id
+            update_cs.effective_message.from_user.is_bot = False
+            update_cs.effective_message.from_user.mention_html.return_value = "@student"
+            update_cs.effective_message.reply_to_message = None
+            update_cs.effective_message.text = "CS"
+            update_cs.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update_cs, context)
+            update_cs.effective_message.reply_text.assert_called_once()
+            called_text = update_cs.effective_message.reply_text.call_args[0][0]
+            self.assertIn("Computer Science (IT)", called_text)
+            self.assertIn("Cybersecurity (CS)", called_text)
+            self.assertTrue(tracker.is_pending_clarification(chat_id, user_id))
+
+            # 2. Newcomer answers "IT" without Reply
+            update_answer = MagicMock()
+            update_answer.effective_message.chat.id = chat_id
+            update_answer.effective_message.from_user.id = user_id
+            update_answer.effective_message.from_user.is_bot = False
+            update_answer.effective_message.from_user.mention_html.return_value = "@student"
+            update_answer.effective_message.reply_to_message = None
+            update_answer.effective_message.text = "IT"
+            update_answer.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update_answer, context)
+            update_answer.effective_message.reply_text.assert_called_once()
+            ans_text = update_answer.effective_message.reply_text.call_args[0][0]
+            self.assertIn("IT", ans_text)
+            self.assertIn("@TypicallyRain", ans_text)
+            self.assertFalse(tracker.is_pending_clarification(chat_id, user_id))
+            self.assertFalse(tracker.is_active_newcomer(chat_id, user_id))
+
+    async def test_newcomer_unreplied_keyboard_layout_translit(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            chat_id = 100
+            user_id = 123
+            tracker.add_user(chat_id, user_id)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            # "ыу" is SE on Russian keyboard
+            update = MagicMock()
+            update.effective_message.chat.id = chat_id
+            update.effective_message.from_user.id = user_id
+            update.effective_message.from_user.is_bot = False
+            update.effective_message.from_user.mention_html.return_value = "@user"
+            update.effective_message.reply_to_message = None
+            update.effective_message.text = "ыу"
+            update.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update, context)
+            update.effective_message.reply_text.assert_called_once()
+            called_text = update.effective_message.reply_text.call_args[0][0]
+            self.assertIn("SE", called_text)
+
+    async def test_newcomer_question_variations_stay_silent(self) -> None:
+        from bot import WelcomeTracker
+
+        questions = [
+            "а сложно учиться на se?",
+            "кто-нибудь поступал на бда?",
+            "что посоветуете выбрать: IT или CS?",
+            "расскажите про кибербез",
+            "подскажите насчет SE",
+            "а ты с се?",
+            "вы на какую оп поступили?",
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+
+            for question in questions:
+                tracker = WelcomeTracker(max_messages=10)
+                chat_id = 100
+                user_id = 123
+                tracker.add_user(chat_id, user_id)
+
+                context = MagicMock()
+                context.application.bot_data = {
+                    "op_registry": registry,
+                    "welcome_tracker": tracker,
+                }
+
+                update = MagicMock()
+                update.effective_message.chat.id = chat_id
+                update.effective_message.from_user.id = user_id
+                update.effective_message.from_user.is_bot = False
+                update.effective_message.reply_to_message = None
+                update.effective_message.text = question
+                update.effective_message.reply_text = AsyncMock()
+
+                await handle_op_message(update, context)
+                update.effective_message.reply_text.assert_not_called()
+
+    async def test_reply_to_other_student_ignored_for_old_member(self) -> None:
+        from bot import WelcomeTracker
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "op_admins.json"
+            registry = OPRegistry(path)
+            tracker = WelcomeTracker(max_messages=5)
+            # Add welcome message for a different newcomer
+            tracker.add_welcome_message(100, 500, 111)
+
+            context = MagicMock()
+            context.application.bot_data = {
+                "op_registry": registry,
+                "welcome_tracker": tracker,
+            }
+
+            # Old member (user 999) replies to student message (msg 700)
+            update = MagicMock()
+            update.effective_message.chat.id = 100
+            update.effective_message.from_user.id = 999
+            update.effective_message.from_user.is_bot = False
+            update.effective_message.reply_to_message.message_id = 700
+            update.effective_message.text = "я сешник"
+            update.effective_message.reply_text = AsyncMock()
+
+            await handle_op_message(update, context)
+            update.effective_message.reply_text.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 
